@@ -12,26 +12,31 @@ const BUTTONS = {
   ]
 };
 
-// ✅ Llama directamente a /.netlify/functions/ sin redirects
 async function sendTelegram(text, buttons = []) {
   const res = await fetch('/.netlify/functions/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, buttons })
   });
-  const data = await res.json();
-  console.log('send response:', data);
-  return data;
+  return res.json();
 }
 
 let lastUpdateId = 0;
 
-function startPolling(handler) {
+async function startPolling(handler) {
+  // 1️⃣ Primero limpiamos todos los updates viejos de Telegram
+  try {
+    const init = await fetch('/.netlify/functions/poll?init=true');
+    const initData = await init.json();
+    // Arrancamos desde el último update ya procesado
+    if (initData.update_id) lastUpdateId = initData.update_id;
+  } catch(e) { console.error('init error:', e); }
+
+  // 2️⃣ Ahora sí empezamos a escuchar solo updates NUEVOS
   const iv = setInterval(async () => {
     try {
       const res = await fetch(`/.netlify/functions/poll?offset=${lastUpdateId}`);
       const data = await res.json();
-      console.log('poll response:', data);
       if (!data.ok || !data.action) {
         if (data.update_id) lastUpdateId = data.update_id;
         return;
